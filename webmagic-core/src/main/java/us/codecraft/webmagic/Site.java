@@ -1,10 +1,10 @@
 package us.codecraft.webmagic;
 
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.Table;
 import org.apache.http.HttpHost;
-
+import org.apache.http.auth.UsernamePasswordCredentials;
+import us.codecraft.webmagic.proxy.Proxy;
 import us.codecraft.webmagic.proxy.ProxyPool;
+import us.codecraft.webmagic.proxy.SimpleProxyPool;
 import us.codecraft.webmagic.utils.UrlUtils;
 
 import java.util.*;
@@ -24,7 +24,7 @@ public class Site {
 
     private Map<String, String> defaultCookies = new LinkedHashMap<String, String>();
 
-    private Table<String, String, String> cookies = HashBasedTable.create();
+    private Map<String, Map<String, String>> cookies = new HashMap<String, Map<String, String>>();
 
     private String charset;
 
@@ -50,6 +50,8 @@ public class Site {
     private Map<String, String> headers = new HashMap<String, String>();
 
     private HttpHost httpProxy;
+
+    private UsernamePasswordCredentials usernamePasswordCredentials; //代理用户名密码设置
 
     private ProxyPool httpProxyPool;
 
@@ -81,8 +83,8 @@ public class Site {
     /**
      * Add a cookie with domain {@link #getDomain()}
      *
-     * @param name
-     * @param value
+     * @param name name
+     * @param value value
      * @return this
      */
     public Site addCookie(String name, String value) {
@@ -93,13 +95,16 @@ public class Site {
     /**
      * Add a cookie with specific domain.
      *
-     * @param domain
-     * @param name
-     * @param value
-     * @return
+     * @param domain domain
+     * @param name name
+     * @param value value
+     * @return this
      */
     public Site addCookie(String domain, String name, String value) {
-        cookies.put(domain, name, value);
+        if (!cookies.containsKey(domain)){
+            cookies.put(domain,new HashMap<String, String>());
+        }
+        cookies.get(domain).put(name, value);
         return this;
     }
 
@@ -129,7 +134,7 @@ public class Site {
      * @return get cookies
      */
     public Map<String,Map<String, String>> getAllCookies() {
-        return cookies.rowMap();
+        return cookies;
     }
 
     /**
@@ -153,7 +158,7 @@ public class Site {
     /**
      * set the domain of site.
      *
-     * @param domain
+     * @param domain domain
      * @return this
      */
     public Site setDomain(String domain) {
@@ -165,7 +170,7 @@ public class Site {
      * Set charset of page manually.<br>
      * When charset is not set or set to null, it can be auto detected by Http header.
      *
-     * @param charset
+     * @param charset charset
      * @return this
      */
     public Site setCharset(String charset) {
@@ -189,7 +194,8 @@ public class Site {
     /**
      * set timeout for downloader in ms
      *
-     * @param timeOut
+     * @param timeOut timeOut
+     * @return this
      */
     public Site setTimeOut(int timeOut) {
         this.timeOut = timeOut;
@@ -202,7 +208,7 @@ public class Site {
      * {200} by default.<br>
      * It is not necessarily to be set.<br>
      *
-     * @param acceptStatCode
+     * @param acceptStatCode acceptStatCode
      * @return this
      */
     public Site setAcceptStatCode(Set<Integer> acceptStatCode) {
@@ -239,7 +245,7 @@ public class Site {
      * Add a url to start url.<br>
      * Because urls are more a Spider's property than Site, move it to {@link Spider#addUrl(String...)}}
      *
-     * @param startUrl
+     * @param startUrl startUrl
      * @return this
      * @see Spider#addUrl(String...)
      * @deprecated
@@ -252,7 +258,7 @@ public class Site {
      * Add a url to start url.<br>
      * Because urls are more a Spider's property than Site, move it to {@link Spider#addRequest(Request...)}}
      *
-     * @param startRequest
+     * @param startRequest startRequest
      * @return this
      * @see Spider#addRequest(Request...)
      * @deprecated
@@ -269,7 +275,7 @@ public class Site {
      * Set the interval between the processing of two pages.<br>
      * Time unit is micro seconds.<br>
      *
-     * @param sleepTime
+     * @param sleepTime sleepTime
      * @return this
      */
     public Site setSleepTime(int sleepTime) {
@@ -301,12 +307,12 @@ public class Site {
     }
 
     /**
-     * Put an Http header for downloader. <br/>
-     * Use {@link #addCookie(String, String)} for cookie and {@link #setUserAgent(String)} for user-agent. <br/>
+     * Put an Http header for downloader. <br>
+     * Use {@link #addCookie(String, String)} for cookie and {@link #setUserAgent(String)} for user-agent. <br>
      *
      * @param key   key of http header, there are some keys constant in {@link HeaderConst}
      * @param value value of header
-     * @return
+     * @return this
      */
     public Site addHeader(String key, String value) {
         headers.put(key, value);
@@ -316,6 +322,7 @@ public class Site {
     /**
      * Set retry times when download fail, 0 by default.<br>
      *
+     * @param retryTimes retryTimes
      * @return this
      */
     public Site setRetryTimes(int retryTimes) {
@@ -335,6 +342,7 @@ public class Site {
     /**
      * Set cycleRetryTimes times when download fail, 0 by default. <br>
      *
+     * @param cycleRetryTimes cycleRetryTimes
      * @return this
      */
     public Site setCycleRetryTimes(int cycleRetryTimes) {
@@ -349,8 +357,8 @@ public class Site {
     /**
      * set up httpProxy for this site
      *
-     * @param httpProxy
-     * @return
+     * @param httpProxy httpProxy
+     * @return this
      */
     public Site setHttpProxy(HttpHost httpProxy) {
         this.httpProxy = httpProxy;
@@ -368,7 +376,8 @@ public class Site {
     /**
      * Set retry sleep times when download fail, 1000 by default. <br>
      *
-     * @param retrySleepTime
+     * @param retrySleepTime retrySleepTime
+     * @return this
      */
     public Site setRetrySleepTime(int retrySleepTime) {
         this.retrySleepTime = retrySleepTime;
@@ -379,8 +388,8 @@ public class Site {
      * Whether use gzip. <br>
      * Default is true, you can set it to false to disable gzip.
      *
-     * @param useGzip
-     * @return
+     * @param useGzip useGzip
+     * @return this
      */
     public Site setUseGzip(boolean useGzip) {
         this.useGzip = useGzip;
@@ -462,15 +471,37 @@ public class Site {
     /**
      * Set httpProxyPool, String[0]:ip, String[1]:port <br>
      *
+     * @param proxyPool proxyPool
      * @return this
      */
-    public Site setHttpProxyPool(List<String[]> httpProxyList) {
-        this.httpProxyPool=new ProxyPool(httpProxyList);
+    public Site setHttpProxyPool(ProxyPool proxyPool) {
+        this.httpProxyPool = proxyPool;
+        return this;
+    }
+
+    /**
+     * Set httpProxyPool, String[0]:ip, String[1]:port <br>
+     *
+     * @param httpProxyList httpProxyList
+     * @param isUseLastProxy isUseLastProxy
+     * @return this
+     */
+    public Site setHttpProxyPool(List<String[]> httpProxyList, boolean isUseLastProxy) {
+        this.httpProxyPool=new SimpleProxyPool(httpProxyList, isUseLastProxy);
         return this;
     }
 
     public Site enableHttpProxyPool() {
-        this.httpProxyPool=new ProxyPool();
+        this.httpProxyPool=new SimpleProxyPool();
+        return this;
+    }
+
+    public UsernamePasswordCredentials getUsernamePasswordCredentials() {
+        return usernamePasswordCredentials;
+    }
+
+    public Site setUsernamePasswordCredentials(UsernamePasswordCredentials usernamePasswordCredentials) {
+        this.usernamePasswordCredentials = usernamePasswordCredentials;
         return this;
     }
 
@@ -478,17 +509,12 @@ public class Site {
         return httpProxyPool;
     }
 
-    public HttpHost getHttpProxyFromPool() {
+    public Proxy getHttpProxyFromPool() {
         return httpProxyPool.getProxy();
     }
 
     public void returnHttpProxyToPool(HttpHost proxy,int statusCode) {
         httpProxyPool.returnProxy(proxy,statusCode);
-    }
-
-    public Site setProxyReuseInterval(int reuseInterval) {
-        this.httpProxyPool.setReuseInterval(reuseInterval);
-        return this;
     }
 
 }
